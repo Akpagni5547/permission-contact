@@ -9,14 +9,14 @@ class PageContact extends StatefulWidget {
   State<PageContact> createState() => _PageContactState();
 }
 
-// TODO: faire le flow de refus permanent
-class _PageContactState extends State<PageContact> {
+class _PageContactState extends State<PageContact> with WidgetsBindingObserver {
   bool isGranted = false;
   late List<Contact> contactsList = [];
   List<Contact> contactsListFiltered = [];
   bool isLoadingContact = false;
   String errorGetContact = "";
-  TextEditingController searchController = new TextEditingController();
+  bool _detectPermission = false;
+  TextEditingController searchController = TextEditingController();
 
   Future<List<Contact>> getPhoneContacts() async {
     Iterable<Contact> contacts = await ContactsService.getContacts();
@@ -26,12 +26,31 @@ class _PageContactState extends State<PageContact> {
   @override
   void initState() {
     super.initState();
-    call();
+    WidgetsBinding.instance.addObserver(this);
+    call(executeAllFunction: true);
   }
 
-  void call() async {
+  @override
+  dispose() {
+    super.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _detectPermission &&
+        isGranted == false) {
+      _detectPermission = false;
+      call(executeAllFunction: false);
+    } else if (state == AppLifecycleState.paused && isGranted == false) {
+      _detectPermission = true;
+    } else if (state == AppLifecycleState.detached) {
+    } else if (state == AppLifecycleState.inactive) {}
+  }
+
+  void call({required bool executeAllFunction}) async {
     var status = await Permission.contacts.status;
-    print(status.isGranted);
     if (status.isGranted) {
       setState(() {
         isLoadingContact = true;
@@ -52,8 +71,9 @@ class _PageContactState extends State<PageContact> {
         });
       }
     } else {
-      print('else');
-      requestContact(true);
+      if (executeAllFunction) {
+        requestContact(true);
+      }
     }
   }
 
@@ -110,10 +130,10 @@ class _PageContactState extends State<PageContact> {
             ),
             TextButton(
               child: const Text("OK"),
-              onPressed: () {
+              onPressed: () async {
                 // Traitez l'action ici
-                openAppSettings();
                 Navigator.of(context).pop();
+                await openAppSettings();
               },
             ),
           ],
@@ -123,12 +143,15 @@ class _PageContactState extends State<PageContact> {
   }
 
   void searchInContact(String searchInContact) {
-    List<Contact> _contacts = [];
-    _contacts.addAll(contactsList);
+    List<Contact> contacts = [];
+    contacts.addAll(contactsList);
     if (searchInContact.isNotEmpty) {
-      _contacts.retainWhere((contact) {
+      contacts.retainWhere((contact) {
         final String displayNameContact = contact.displayName ?? '';
-        final String phoneContact = contact.phones?[0].value ?? '';
+        final String phoneContact =
+            contact.phones == null || contact.phones!.isEmpty
+                ? ''
+                : contact.phones![0].value!;
         final bool testMatchName = displayNameContact
             .toLowerCase()
             .contains(searchInContact.trim().toLowerCase());
@@ -140,7 +163,7 @@ class _PageContactState extends State<PageContact> {
       });
     }
     setState(() {
-      contactsListFiltered = _contacts;
+      contactsListFiltered = contacts;
     });
   }
 
@@ -222,7 +245,7 @@ class ComponentRecent extends StatelessWidget {
         const SizedBox(
           height: 10,
         ),
-        Container(
+        SizedBox(
           height: 100,
           child: ListView.builder(
               itemCount: 10,
@@ -254,10 +277,10 @@ class ListContact extends StatelessWidget {
   final bool granted;
   final bool isSearch;
   final String error;
-  void Function() requestContact;
+  final void Function() requestContact;
   final List<Contact> listContact;
 
-  ListContact({
+  const ListContact({
     Key? key,
     required this.loading,
     required this.isSearch,
@@ -341,16 +364,19 @@ class ListContact extends StatelessWidget {
                     itemCount: listContact.length,
                     itemBuilder: (contextBuilder, index) {
                       final contact = listContact[index];
-                      final String name = contact.displayName ?? '0';
                       return ListTile(
                         leading: CircleAvatar(
                           backgroundColor: Colors.blue,
-                          child: contact.avatar == null
-                              ? Text(name.substring(0, 1))
-                              : Image.memory(contact.avatar!),
+                          child:
+                              contact.avatar == null || contact.avatar!.isEmpty
+                                  ? const Icon(Icons.person)
+                                  : Image.memory(contact.avatar!),
                         ),
                         title: Text(contact.displayName ?? ''),
-                        subtitle: Text(contact.phones![0].value!),
+                        subtitle: Text(
+                            contact.phones == null || contact.phones!.isEmpty
+                                ? ''
+                                : contact.phones![0].value!),
                         trailing: const Icon(Icons.arrow_forward_ios),
                       );
                     },

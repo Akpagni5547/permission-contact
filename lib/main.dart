@@ -1,3 +1,4 @@
+import 'package:contact_list/page_one.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'package:flutter/material.dart';
@@ -19,7 +20,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const PageContact(),
+      home: const PageOne(),
     );
   }
 }
